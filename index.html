@@ -263,7 +263,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 // ── Config
-const GWS=['Indian Rest','Binance Nabil','Binance Nabil 2','Binance Shefat','Redot Pay','bKash','Nagad','DBBL','Web Dev','BRAC Bank','Shefat DBBL','Nabil DBBL','Sayem DBBL','Shaheed DBBL','Cash','Marketplace','Payoneer','Stripe','Nsave','Payoneer Business','Wise','Zelle','CashApp'];
+const GWS=['Indian Pending','Binance 1','Binance 2','Binance 3','Redot Pay','bKash','Nagad','DBBL','Web Dev','BRAC Bank','Shefat Bank','Nabil Bank','Shaheed Bank','Sayem Bank','Cash','Marketplace','Payoneer','Stripe','Nsave','Payoneer Business','Wise','Zelle','CashApp'];
 const HRS=Array.from({length:24},(_,i)=>i);
 const BCS=['#4361ee','#0ab87a','#7b2d8b','#f4a21a','#e63946','#fb5607','#4cc9f0'];
 const BST=['Not Started','Pending','Working','Completed'];
@@ -276,7 +276,7 @@ const DT=[{id:uid(),title:'Client proposal – Zenith Co.',details:'Revised pric
 const DB=[{id:uid(),title:'Morning Standup',hour:9,dur:1,pri:'Medium',bs:'Not Started',color:'#4361ee',notes:''},{id:uid(),title:'Client Call – Zenith',hour:11,dur:1,pri:'High',bs:'Not Started',color:'#e63946',notes:'Prepare deck'},{id:uid(),title:'Deep Work',hour:14,dur:2,pri:'High',bs:'Not Started',color:'#7b2d8b',notes:''},{id:uid(),title:'EOD Review',hour:17,dur:1,pri:'Low',bs:'Not Started',color:'#0ab87a',notes:''}];
 const DTEAM=[{id:uid(),name:'Riya Islam',dept:'Design',role:'Senior Designer',rating:4},{id:uid(),name:'Ahmed Hossain',dept:'Development',role:'Frontend Dev',rating:5},{id:uid(),name:'Priya Das',dept:'Content',role:'Copywriter',rating:3}];
 const DP=[{id:uid(),name:'Zenith Co. Rebrand',client:'Zenith Co.',status:'In Progress',deadline:'2026-05-01',budget:5000,spent:2200,desc:'Brand identity + website',progress:45},{id:uid(),name:'NovaBrand Campaign',client:'NovaBrand',status:'In Progress',deadline:'2026-04-20',budget:3000,spent:2800,desc:'Social media & ads',progress:80},{id:uid(),name:'Internal Website',client:'Internal',status:'Todo',deadline:'2026-06-01',budget:1500,spent:0,desc:'Agency portfolio',progress:0}];
-const DF={months:{'2026-04':{saleUSD:12500,saleBDT:0,rate:115,expense:253000,advance:20000,salAdv:15000,prevMonth:80000,gws:Object.fromEntries(GWS.map(g=>[g,{usd:0,bdt:0}]))}}};
+const DF={months:{'2026-04':{saleUSD:0,saleBDT:0,rate:115,expense:0,advance:0,salAdv:0,prevMonth:0,gws:Object.fromEntries(['Indian Pending','Binance 1','Binance 2','Binance 3','Redot Pay','bKash','Nagad','DBBL','Web Dev','BRAC Bank','Shefat Bank','Nabil Bank','Shaheed Bank','Sayem Bank','Cash','Marketplace','Payoneer','Stripe','Nsave','Payoneer Business','Wise','Zelle','CashApp'].map(g=>[g,{usd:0,bdt:0}]))}}};
 
 // ── State
 let CP='dash', TF='All', TQ='', RV='tl', FT='ov', FM='2026-04', TV='list', SMI=null;
@@ -642,6 +642,19 @@ function rProj(){
 // ── Finance
 function gFin(){return ls.g('fin',DF)}
 function sFin(f){ls.s('fin',f)}
+
+// Temp gateway inputs stored before update
+let gwTemp={};
+
+function initGwTemp(){
+  const fin=gFin(),md=fin.months[FM]||{};
+  gwTemp={};
+  GWS.forEach(gw=>{
+    const v=md.gws?.[gw]||{usd:0,bdt:0};
+    gwTemp[gw]={usd:v.usd||0,bdt:v.bdt||0};
+  });
+}
+
 function calcFin(){
   const fin=gFin(),md=fin.months[FM]||{};
   const gwe=md.gws?Object.entries(md.gws):[];
@@ -650,15 +663,38 @@ function calcFin(){
   const saleBDT=md.saleBDT||calcBDT;
   const tExp=(md.expense||0)+(md.advance||0)+(md.salAdv||0);
   const net=saleBDT+(md.prevMonth||0)-tExp;
-  return{md,gwU,gwB,rate,calcBDT,saleBDT,tExp,net};
+  // Grand total: all USD converted to BDT + all BDT
+  const grandTotal = (gwU * rate) + gwB;
+  return{md,gwU,gwB,rate,calcBDT,saleBDT,tExp,net,grandTotal};
 }
+
 function uFin(k,v){const fin=gFin();fin.months[FM]={...fin.months[FM]||{},[k]:+v||0};sFin(fin)}
-function uGW(gw,cur,v){const fin=gFin();const md=fin.months[FM]||{};const gws={...md.gws,[gw]:{...md.gws?.[gw],[cur]:+v||0}};fin.months[FM]={...md,gws};sFin(fin)}
+
+function updateGateways(){
+  // Read all current input values and save to storage
+  const fin=gFin();
+  const md=fin.months[FM]||{};
+  const gws={...md.gws};
+  GWS.forEach(gw=>{
+    const uEl=document.getElementById('gw_usd_'+gw.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
+    const bEl=document.getElementById('gw_bdt_'+gw.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,''));
+    if(uEl||bEl){
+      gws[gw]={usd:+(uEl?uEl.value:0)||0,bdt:+(bEl?bEl.value:0)||0};
+    }
+  });
+  fin.months[FM]={...md,gws};
+  sFin(fin);
+  rp();
+}
+
 function addMonth(){const m=prompt('Enter month (YYYY-MM):');if(!m)return;const fin=gFin();if(!fin.months[m]){fin.months[m]={saleUSD:0,saleBDT:0,rate:115,expense:0,advance:0,salAdv:0,prevMonth:0,gws:Object.fromEntries(GWS.map(g=>[g,{usd:0,bdt:0}]))};sFin(fin)}FM=m;rp()}
 function recalc(){const fin=gFin();const md=fin.months[FM]||{};const calcBDT=(md.saleUSD||0)*(md.rate||115);fin.months[FM]={...md,saleBDT:calcBDT};sFin(fin);rp()}
+
+function gwId(gw,cur){return 'gw_'+cur+'_'+gw.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}
+
 function rFin(){
   const fin=gFin(),months=Object.keys(fin.months);
-  const{md,gwU,gwB,rate,calcBDT,saleBDT,tExp,net}=calcFin();
+  const{md,gwU,gwB,rate,calcBDT,saleBDT,tExp,net,grandTotal}=calcFin();
   const tabBtns=['ov','gw','sum'].map((t,i)=>{const lbl=['Overview','Gateways','Summary'][i];return `<button onclick="FT='${t}';rp()" style="height:34px;padding:0 16px;font-size:12px;font-weight:600;border-radius:var(--rs);border:1.5px solid ${FT===t?'var(--accent)':'var(--b2)'};background:${FT===t?'var(--accent)':'var(--surface)'};color:${FT===t?'#fff':'var(--t2)'};cursor:pointer;font-family:var(--f);display:inline-flex;align-items:center;white-space:nowrap">${lbl}</button>`}).join('');
   const hdr=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px;flex-wrap:wrap"><div style="display:flex;gap:6px;align-items:center">${tabBtns}</div><div style="display:flex;gap:8px;align-items:center"><select class="inp" style="width:120px;padding:0 10px;height:34px;font-size:12px" onchange="FM=this.value;rp()">${months.map(m=>`<option${m===FM?' selected':''}>${m}</option>`).join('')}</select><button class="btn bg bsm" style="height:34px" onclick="addMonth()">+ Month</button></div></div>`;
 
@@ -677,21 +713,54 @@ function rFin(){
     </div>
   </div>`;
 
-  if(FT==='gw') return hdr+`
+  if(FT==='gw'){
+    const gwUtemp=GWS.reduce((s,gw)=>{const el=document.getElementById(gwId(gw,'usd'));return s+(el?+el.value||0:(md.gws?.[gw]?.usd||0))},0);
+    const gwBtemp=GWS.reduce((s,gw)=>{const el=document.getElementById(gwId(gw,'bdt'));return s+(el?+el.value||0:(md.gws?.[gw]?.bdt||0))},0);
+    const grandT=(gwU*rate)+gwB;
+    return hdr+`
   <div class="card" style="padding:0;overflow:hidden">
-    <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
-      <div class="gwr" style="border:none;padding:0"><span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Gateway</span><span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">USD ($)</span><span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">BDT (৳)</span></div>
+    <div style="padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;flex:1;min-width:280px">
+        <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Gateway</span>
+        <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Amount USD ($)</span>
+        <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Amount BDT (৳)</span>
+      </div>
+      <button onclick="updateGateways()" style="height:36px;padding:0 18px;font-size:12px;font-weight:700;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:var(--f);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;box-shadow:0 2px 8px rgba(67,97,238,.3)">✅ Update & Calculate</button>
     </div>
     <div style="padding:0 18px">
-      ${GWS.map(gw=>{const v=md.gws?.[gw]||{usd:0,bdt:0};return `<div class="gwr"><span class="f12 semi">${gw}</span><input class="inp" type="number" value="${v.usd||''}" placeholder="0" onchange="uGW('${gw}','usd',this.value)" style="padding:5px 7px;font-size:11px"/><input class="inp" type="number" value="${v.bdt||''}" placeholder="0" onchange="uGW('${gw}','bdt',this.value)" style="padding:5px 7px;font-size:11px"/></div>`}).join('')}
-      <div class="gwtot"><span>Total</span><span style="color:var(--accent)">$${gwU.toLocaleString()}</span><span style="color:var(--green)">৳${gwB.toLocaleString()}</span></div>
+      ${GWS.map(gw=>{
+        const v=md.gws?.[gw]||{usd:0,bdt:0};
+        const uid_=gwId(gw,'usd'), bid_=gwId(gw,'bdt');
+        return `<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);align-items:center">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">${gw}</span>
+          <input id="${uid_}" class="inp" type="number" value="${v.usd||''}" placeholder="0" style="padding:6px 8px;font-size:12px"/>
+          <input id="${bid_}" class="inp" type="number" value="${v.bdt||''}" placeholder="0" style="padding:6px 8px;font-size:12px"/>
+        </div>`;
+      }).join('')}
+    </div>
+    <!-- Totals -->
+    <div style="padding:0 18px">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;padding:12px 0 8px;border-top:2px solid var(--b2);margin-top:2px;font-weight:700;font-size:13px">
+        <span>Sub Total</span>
+        <span style="color:var(--accent)">$${gwU.toLocaleString()}</span>
+        <span style="color:var(--green)">৳${gwB.toLocaleString()}</span>
+      </div>
+      <!-- Grand Total: USD × rate + BDT -->
+      <div style="background:linear-gradient(135deg,var(--accent),#7209b7);border-radius:var(--rs);padding:14px 16px;margin:8px 0 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Grand Total (BDT)</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65)">($${gwU.toLocaleString()} × ${rate} BDT) + ৳${gwB.toLocaleString()}</div>
+        </div>
+        <div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px">৳${grandT.toLocaleString()}</div>
+      </div>
     </div>
   </div>`;
+  }
 
   return hdr+`
   <div class="card">
     <div class="ct">Summary — ${FM}</div>
-    ${[{l:'Total Sale (USD)',v:nf(md.saleUSD,'$'),c:'var(--accent)'},{l:'Total Sale (BDT)',v:nf(saleBDT,'৳'),c:'var(--green)'},{l:'USD → BDT Rate',v:`${rate} BDT / $1`,c:'var(--t2)'},{l:'Gateway Collections (USD)',v:nf(gwU,'$'),c:'var(--accent)'},{l:'Gateway Collections (BDT)',v:nf(gwB,'৳'),c:'var(--green)'},{l:'Monthly Expenses',v:nf(md.expense,'৳'),c:'var(--red)'},{l:'Advance Payment',v:nf(md.advance,'৳'),c:'var(--red)'},{l:'Salary Advance',v:nf(md.salAdv,'৳'),c:'var(--red)'},{l:'Previous Month Balance',v:nf(md.prevMonth,'৳'),c:'var(--t2)'}].map(r=>`
+    ${[{l:'Total Sale (USD)',v:nf(md.saleUSD,'$'),c:'var(--accent)'},{l:'Total Sale (BDT)',v:nf(saleBDT,'৳'),c:'var(--green)'},{l:'USD → BDT Rate',v:`${rate} BDT / $1`,c:'var(--t2)'},{l:'Gateway Collections (USD)',v:nf(gwU,'$'),c:'var(--accent)'},{l:'Gateway Collections (BDT)',v:nf(gwB,'৳'),c:'var(--green)'},{l:'Gateway Grand Total (BDT)',v:nf(grandTotal,'৳'),c:'var(--accent)'},{l:'Monthly Expenses',v:nf(md.expense,'৳'),c:'var(--red)'},{l:'Advance Payment',v:nf(md.advance,'৳'),c:'var(--red)'},{l:'Salary Advance',v:nf(md.salAdv,'৳'),c:'var(--red)'},{l:'Previous Month Balance',v:nf(md.prevMonth,'৳'),c:'var(--t2)'}].map(r=>`
     <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px">
       <span style="color:var(--t2);font-weight:500">${r.l}</span><span style="font-weight:700;color:${r.c}">${r.v}</span>
     </div>`).join('')}
@@ -779,7 +848,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 // Expose for inline handlers
-Object.assign(window,{go,tSB,cSB,doAction,cM,oTM,svTask,delTask,cTS,oBM,svBlock,cBS,delBlock,oMM,svMember,oAT,svAT,cTTS,setRat,oPM,svProj,uFin,uGW,addMonth,recalc,svSnap,rp,gTasks,sTasks,gTeam,sTeam,gTT,sTT,gProj,sProj,gFin,sFin,gBlocks,sBlocks,$,TF,TQ,RV,FT,FM,TV,SMI});
+Object.assign(window,{go,tSB,cSB,doAction,cM,oTM,svTask,delTask,cTS,oBM,svBlock,cBS,delBlock,oMM,svMember,oAT,svAT,cTTS,setRat,oPM,svProj,uFin,updateGateways,gwId,addMonth,recalc,svSnap,rp,gTasks,sTasks,gTeam,sTeam,gTT,sTT,gProj,sProj,gFin,sFin,gBlocks,sBlocks,$,TF,TQ,RV,FT,FM,TV,SMI});
 </script>
 </body>
 </html>
