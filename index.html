@@ -112,7 +112,7 @@ select.inp{cursor:pointer}
 
 /* Timeline */
 .trow{display:flex;min-height:50px;border-bottom:1px solid var(--border)}
-.thour{min-width:50px;padding:9px 8px 0 0;text-align:right;font-size:10px;font-weight:600;flex-shrink:0}
+.thour{min-width:68px;padding:9px 8px 0 0;text-align:right;font-size:10px;font-weight:600;flex-shrink:0}
 .tcontent{flex:1;padding:5px 0 5px 12px;border-left:2px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start}
 .bcard{border-radius:var(--rs);padding:7px 10px;cursor:pointer;min-width:140px;transition:transform .1s,box-shadow .1s}
 .bcard:hover{transform:translateY(-1px);box-shadow:var(--shadow2)}
@@ -261,6 +261,7 @@ const pc=(a,b)=>b?Math.round(a/b*100):0;
 const nf=(n,p='')=>`${p}${(+n||0).toLocaleString()}`;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtHour=h=>{if(h===0)return'12:00 AM';if(h===12)return'12:00 PM';return h<12?`${h}:00 AM`:`${h-12}:00 PM`};
 
 // ── Config
 const GWS=['Indian Pending','Binance 1','Binance 2','Binance 3','Redot Pay','bKash','Nagad','DBBL','Web Dev','BRAC Bank','Shefat Bank','Nabil Bank','Shaheed Bank','Sayem Bank','Cash','Marketplace','Payoneer','Stripe','Nsave','Payoneer Business','Wise','Zelle','CashApp'];
@@ -389,7 +390,7 @@ function oBM(bl=null){
   const tasks=gTasks().filter(t=>t.status!=='Done');
   oModal(e?'Edit Block':'Add Time Block',
     ig('Title *',ti('b_t',b.title,'e.g. Deep Work…'))+
-    rg(ig('Start Hour',`<select class="inp" id="b_h">${HRS.map(h=>`<option value="${h}"${h===b.hour?' selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}</select>`),ig('Duration',`<select class="inp" id="b_d">${[1,2,3,4].map(d=>`<option value="${d}"${d===b.dur?' selected':''}>${d}h</option>`).join('')}</select>`),ig('Priority',si('b_p',['High','Medium','Low'],b.pri)))+
+    rg(ig('Start Hour',`<select class="inp" id="b_h">${HRS.map(h=>`<option value="${h}"${h===b.hour?' selected':''}>${fmtHour(h)}</option>`).join('')}</select>`),ig('Duration',`<select class="inp" id="b_d">${[1,2,3,4].map(d=>`<option value="${d}"${d===b.dur?' selected':''}>${d}h</option>`).join('')}</select>`),ig('Priority',si('b_p',['High','Medium','Low'],b.pri)))+
     rg(ig('Status',`<select class="inp" id="b_s">${BST.map(s=>`<option${s===b.bs?' selected':''}>${s}</option>`).join('')}</select>`),ig('Link Task',`<select class="inp" id="b_tk"><option value="">— None —</option>${tasks.map(t=>`<option value="${t.id}"${t.id===b.tid?' selected':''}>${esc(t.title)}</option>`).join('')}</select>`))+
     ig('Color',`<div style="display:flex;gap:7px;margin-top:3px">${BCS.map(c=>`<div onclick="$('b_c').value='${c}'" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;border:${c===b.color?'3px solid var(--text)':'3px solid transparent'}"></div>`).join('')}<input type="hidden" id="b_c" value="${b.color}"/></div>`)+
     ig('Notes',`<textarea class="inp" id="b_n" placeholder="Preparation notes…">${b.notes||''}</textarea>`),
@@ -427,7 +428,7 @@ function rRoutine(){
   </div>
   ${sorted.map(b=>{const lk=gTasks().find(t=>t.id===b.tid);return `
   <div style="display:flex;gap:10px;margin-bottom:8px">
-    <div style="min-width:42px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);padding-top:5px">${String(b.hour).padStart(2,'0')}:00</div>
+    <div style="min-width:56px;text-align:right;font-size:10px;font-weight:600;color:var(--muted);padding-top:5px">${fmtHour(b.hour)}</div>
     <div style="border-left:3px solid ${b.color};padding-left:12px;flex:1;padding-bottom:10px;border-bottom:1px solid var(--border)">
       <div class="fc gap6 mb6 fw"><span style="font-weight:700;font-size:13px;text-decoration:${b.bs==='Completed'?'line-through':'none'};color:${b.bs==='Completed'?'var(--muted)':'var(--text)'}">${esc(b.title)}</span>${pb(b.pri)}${b.hour===now?`<span class="badge" style="color:var(--accent);background:var(--aBg)">▶ Now</span>`:''}</div>
       <div class="fc gap6 fw">${bsb(b.bs,b.id)}<span class="f11 cm">${b.dur}h${lk?` · ${esc(lk.title)}`:''}</span></div>
@@ -447,7 +448,7 @@ function rRoutine(){
       ${HRS.map(h=>{
         const hb=blocks.filter(b=>b.hour===h),iC=h===now,iP=h<now;
         return `<div class="trow">
-          <div class="thour" style="color:${iC?'var(--accent)':iP?'var(--muted)':'var(--t2)'};font-weight:${iC?700:500}">${String(h).padStart(2,'0')}:00</div>
+          <div class="thour" style="color:${iC?'var(--accent)':iP?'var(--muted)':'var(--t2)'};font-weight:${iC?700:500}">${fmtHour(h)}</div>
           <div class="tcontent" style="border-left-color:${iC?'var(--accent)':'var(--border)'}">
             ${hb.map(b=>`<div class="bcard" style="background:${b.color}12;border:1px solid ${b.color}33;border-left:3px solid ${b.color}" onclick='oBM(${JSON.stringify(b).replace(/'/g,"&#39;")})'>
               <div style="display:flex;justify-content:space-between;gap:5px">
@@ -813,7 +814,7 @@ function rDash(){
     </div>
     <div class="card">
       <div class="ct">Today's Blocks</div>
-      ${blocks.slice(0,5).map(b=>`<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)"><div style="width:4px;height:30px;border-radius:99px;background:${b.color};flex-shrink:0"></div><div style="flex:1;overflow:hidden"><div class="f12 semi te">${esc(b.title)}</div><div class="f10 cm">${String(b.hour).padStart(2,'0')}:00 · ${b.dur}h</div></div>${bsb(b.bs,b.id)}</div>`).join('')}
+      ${blocks.slice(0,5).map(b=>`<div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)"><div style="width:4px;height:30px;border-radius:99px;background:${b.color};flex-shrink:0"></div><div style="flex:1;overflow:hidden"><div class="f12 semi te">${esc(b.title)}</div><div class="f10 cm">${fmtHour(b.hour)} · ${b.dur}h</div></div>${bsb(b.bs,b.id)}</div>`).join('')}
       ${blocks.length===0?'<div class="f12 cm">No blocks yet.</div>':''}
     </div>
   </div>
