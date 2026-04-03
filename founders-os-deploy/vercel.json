@@ -1,5 +1,5 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [{ "source": "/(.*)", "destination": "/founders-os-deploy/public/index.html" }],
   "headers": [
     {
       "source": "/sw.js",
