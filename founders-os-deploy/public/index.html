@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>The Founder's OS</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Founder's OS" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #fff; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+    #root { height: 100%; }
+
+    /* Mobile bottom nav */
+    .mobile-nav { display: none; }
+    .desktop-sidebar { display: flex; }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d4d4d0; border-radius: 99px; }
+
+    /* Safe area for iPhone notch/home bar */
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+    @media (max-width: 768px) {
+      .desktop-sidebar { display: none !important; }
+      .mobile-nav { display: flex !important; }
+      .main-content { padding: 16px !important; }
+      .page-title { font-size: 18px !important; }
+      .stat-grid-4 { grid-template-columns: 1fr 1fr !important; }
+      .stat-grid-3 { grid-template-columns: 1fr 1fr !important; }
+      .stat-grid-5 { grid-template-columns: repeat(3, 1fr) !important; }
+      .two-col { grid-template-columns: 1fr !important; }
+      .three-col { grid-template-columns: 1fr !important; }
+      .task-grid { grid-template-columns: 1fr 80px 36px !important; }
+      .task-grid-head { display: none !important; }
+      .modal-box { width: 95vw !important; padding: 20px !important; }
+      .row-wrap { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── THEME ────────────────────────────────────────────────────────────────────
+const C = {
+  bg: "#ffffff", sidebar: "#f7f7f5", hover: "#efefed", border: "#e9e9e7", border2: "#d4d4d0",
+  text: "#1a1a1a", muted: "#9b9b97", muted2: "#6b6b67",
+  accent: "#2383e2", accentBg: "#eef5fd",
+  green: "#0f9d58", greenBg: "#e8f5ee",
+  red: "#d44c47", redBg: "#fdecea",
+  yellow: "#cb912f", yellowBg: "#fef3e2",
+  purple: "#9065b0", purpleBg: "#f3eefa",
+  tag: "#f0f0ee",
+};
+const font = "'DM Sans', system-ui, sans-serif";
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2, 9);
+const today = () => new Date().toISOString().slice(0, 10);
+const fmt = (d) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+function save(key, val) { try { localStorage.setItem("fos_" + key, JSON.stringify(val)); } catch(e){} }
+function load(key, def) { try { const v = localStorage.getItem("fos_" + key); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
+
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const gl = {
+  app: { fontFamily: font, background: C.bg, height: "100vh", color: C.text, display: "flex", flexDirection: "column", fontSize: 14, overflow: "hidden" },
+  appInner: { display: "flex", flex: 1, overflow: "hidden" },
+  sidebar: { width: 220, minWidth: 220, background: C.sidebar, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" },
+  sideTop: { padding: "18px 12px 12px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 },
+  logo: { fontWeight: 700, fontSize: 15, color: C.text, display: "flex", alignItems: "center", gap: 8, padding: "4px 8px" },
+  navItem: (a) => ({ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 6, cursor: "pointer", color: a ? C.text : C.muted2, background: a ? C.hover : "transparent", fontWeight: a ? 500 : 400, fontSize: 13.5, marginBottom: 1, userSelect: "none" }),
+  navIcon: { fontSize: 15, width: 20, textAlign: "center" },
+  main: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
+  topbar: { padding: "14px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  pageTitle: { fontSize: 20, fontWeight: 700, letterSpacing: "-0.3px" },
+  content: { padding: "22px 24px", flex: 1, overflowY: "auto" },
+  card: { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "18px 20px" },
+  cardSm: { background: C.sidebar, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px" },
+  label: { fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: ".6px", textTransform: "uppercase", marginBottom: 5, display: "block" },
+  input: { border: `1px solid ${C.border2}`, borderRadius: 7, padding: "8px 11px", fontSize: 13.5, color: C.text, background: C.bg, width: "100%", outline: "none", boxSizing: "border-box", fontFamily: font },
+  textarea: { border: `1px solid ${C.border2}`, borderRadius: 7, padding: "8px 11px", fontSize: 13.5, color: C.text, background: C.bg, width: "100%", outline: "none", boxSizing: "border-box", fontFamily: font, resize: "vertical", minHeight: 80 },
+  select: { border: `1px solid ${C.border2}`, borderRadius: 7, padding: "8px 11px", fontSize: 13.5, color: C.text, background: C.bg, width: "100%", outline: "none", boxSizing: "border-box", fontFamily: font },
+  btn: { background: C.text, color: "#fff", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font },
+  btnGhost: { background: "transparent", color: C.muted2, border: `1px solid ${C.border2}`, borderRadius: 7, padding: "7px 14px", fontSize: 13, cursor: "pointer", fontFamily: font },
+  btnSm: { background: C.text, color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: font },
+  modal: { position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
+  modalBox: { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: "24px 26px", width: 480, maxWidth: "100%", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,.18)" },
+  row: { display: "flex", gap: 10 },
+  divider: { borderBottom: `1px solid ${C.border}`, margin: "14px 0" },
+  badge: (color, bg) => ({ background: bg, color, borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 600, display: "inline-block" }),
+  tRow: { display: "grid", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.border}` },
+  tHead: { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: ".5px", padding: "0 0 8px", borderBottom: `1px solid ${C.border2}` },
+  mobileNav: { display: "none", position: "fixed", bottom: 0, left: 0, right: 0, background: C.bg, borderTop: `1px solid ${C.border}`, zIndex: 200, paddingBottom: "env(safe-area-inset-bottom, 0px)" },
+};
+
+function PBar({ value, color = C.accent, height = 5 }) {
+  return <div style={{ background: C.border, borderRadius: 99, height, overflow: "hidden" }}><div style={{ width: `${Math.min(value,100)}%`, height: "100%", background: color, borderRadius: 99, transition: "width .5s" }} /></div>;
+}
+const PM = { High: [C.red, C.redBg], Medium: [C.yellow, C.yellowBg], Low: [C.green, C.greenBg] };
+const SM = { Todo: [C.muted2, C.tag], "In Progress": [C.accent, C.accentBg], Done: [C.green, C.greenBg], Blocked: [C.red, C.redBg] };
+function PBadge({ p }) { const [c,b] = PM[p]||[C.muted2,C.tag]; return <span style={gl.badge(c,b)}>{p}</span>; }
+function SBadge({ s }) { const [c,b] = SM[s]||[C.muted2,C.tag]; return <span style={gl.badge(c,b)}>{s}</span>; }
+
+function Modal({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (
+    <div style={gl.modal} onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={gl.modalBox} className="modal-box">
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+          <div style={{ fontSize:16, fontWeight:700 }}>{title}</div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:C.muted, lineHeight:1 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function Field({ label, children }) {
+  return <div style={{ marginBottom:12 }}><label style={gl.label}>{label}</label>{children}</div>;
+}
+function SaveRow({ onCancel, onSave, saveLabel="Save" }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:12 }}>
+      <button style={gl.btnGhost} onClick={onCancel}>Cancel</button>
+      <button style={gl.btn} onClick={onSave}>{saveLabel}</button>
+    </div>
+  );
+}
+
+// ─── SEED DATA ────────────────────────────────────────────────────────────────
+const DEF_TASKS = [
+  { id:uid(), title:"Client proposal – Zenith Co.", details:"Revised pricing + new scope", priority:"High", status:"In Progress", deadline:"2026-04-06", createdAt:today() },
+  { id:uid(), title:"Review social media calendar", details:"April content plan", priority:"Medium", status:"Todo", deadline:"2026-04-08", createdAt:today() },
+  { id:uid(), title:"Send invoice to NovaBrand", details:"2nd reminder", priority:"High", status:"Todo", deadline:"2026-04-04", createdAt:today() },
+  { id:uid(), title:"Website copy review", details:"", priority:"Low", status:"Done", deadline:"2026-04-02", createdAt:"2026-04-01" },
+];
+const DEF_TEAM = [
+  { id:uid(), name:"Riya Islam", dept:"Design", role:"Senior Designer", rating:4 },
+  { id:uid(), name:"Ahmed Hossain", dept:"Development", role:"Frontend Dev", rating:5 },
+  { id:uid(), name:"Priya Das", dept:"Content", role:"Copywriter", rating:3 },
+];
+const GATEWAYS = ["Indian Rest","Binance Nabil","Binance Nabil 2","Binance Shefat","Redot Pay","bKash","Nagad","DBBL","Web Dev","BRAC Bank","Shefat DBBL","Nabil DBBL","Sayem DBBL","Shaheed DBBL","Cash","Marketplace","Payoneer","Stripe","Nsave","Payoneer Business","Wise","Zelle","CashApp"];
+const DEF_FINANCE = { months: { "2026-04": { totalSaleUSD:12500, totalSaleBDT:1450000, usdToBdt:110, expense:253000, advancePayment:20000, salaryAdvance:15000, previousMonth:80000, gateways:Object.fromEntries(GATEWAYS.map(g=>[g,{usd:0,bdt:0}])) }}};
+const DEF_PROJECTS = [
+  { id:uid(), name:"Zenith Co. Rebrand", client:"Zenith Co.", status:"In Progress", deadline:"2026-05-01", budget:5000, spent:2200, desc:"Full brand identity + website", progress:45 },
+  { id:uid(), name:"NovaBrand Campaign", client:"NovaBrand", status:"In Progress", deadline:"2026-04-20", budget:3000, spent:2800, desc:"Social media & ads", progress:80 },
+  { id:uid(), name:"Internal Website", client:"Internal", status:"Todo", deadline:"2026-06-01", budget:1500, spent:0, desc:"Agency portfolio site", progress:0 },
+];
+const DEF_NOTES = {
+  folders: [{ id:"f1", name:"Strategy" },{ id:"f2", name:"Ideas" },{ id:"f3", name:"Client Notes" }],
+  notes: [
+    { id:uid(), folderId:"f1", title:"Q2 Growth Strategy", body:"Focus on outbound outreach + LinkedIn content.\n\n- Target 5 new clients per month\n- Build case study library\n- Launch referral program", updatedAt:today() },
+    { id:uid(), folderId:"f2", title:"New Service Idea", body:"AI automation packages for small agencies.\nCould be $500–$2000/mo retainer.", updatedAt:today() },
+  ]
+};
+const HOURS = Array.from({length:16}, (_,i) => i+6);
+const BLOCK_COLORS = [C.accent, C.green, C.purple, C.yellow, C.red, "#e06c75", "#56b6c2"];
+const BLOCK_STATUS = ["Not Started","Pending","Working","Completed"];
+const BSM = { "Not Started":{color:C.muted2,bg:C.tag,icon:"○"}, "Pending":{color:C.yellow,bg:C.yellowBg,icon:"◔"}, "Working":{color:C.accent,bg:C.accentBg,icon:"◑"}, "Completed":{color:C.green,bg:C.greenBg,icon:"●"} };
+
+function BlockStatusBadge({ status, onClick }) {
+  const m = BSM[status] || BSM["Not Started"];
+  return <span onClick={e=>{e.stopPropagation();onClick&&onClick();}} style={{...gl.badge(m.color,m.bg),cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,userSelect:"none"}}>{m.icon} {status}</span>;
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function Dashboard({ tasks }) {
+  const done = tasks.filter(t=>t.status==="Done").length;
+  const total = tasks.length;
+  const high = tasks.filter(t=>t.priority==="High"&&t.status!=="Done").length;
+  const overdue = tasks.filter(t=>t.deadline<today()&&t.status!=="Done").length;
+  const hr = new Date().getHours();
+  const greet = hr<12?"morning":hr<17?"afternoon":"evening";
+  return (
+    <div>
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:20,fontWeight:700}}>Good {greet} 👋</div>
+        <div style={{color:C.muted,fontSize:13,marginTop:3}}>{new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}} className="stat-grid-4">
+        {[{label:"Total Tasks",value:total,color:C.text},{label:"Completed",value:done,color:C.green},{label:"High Priority",value:high,color:C.red},{label:"Overdue",value:overdue,color:overdue>0?C.red:C.muted}].map(s=>(
+          <div key={s.label} style={gl.cardSm}>
+            <div style={gl.label}>{s.label}</div>
+            <div style={{fontSize:26,fontWeight:700,color:s.color}}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="two-col">
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:10}}>Completion Rate</div>
+          <div style={{fontSize:32,fontWeight:700,color:C.green,marginBottom:6}}>{pct(done,total)}%</div>
+          <PBar value={pct(done,total)} color={C.green} height={6} />
+          <div style={{fontSize:12,color:C.muted,marginTop:6}}>{done} of {total} tasks done</div>
+        </div>
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:10}}>High Priority Pending</div>
+          {tasks.filter(t=>t.priority==="High"&&t.status!=="Done").slice(0,4).map(t=>(
+            <div key={t.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{flex:1,marginRight:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</span><SBadge s={t.status}/>
+            </div>
+          ))}
+          {high===0 && <div style={{color:C.green,fontSize:13}}>✓ All caught up!</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TASK LIST ────────────────────────────────────────────────────────────────
+function TaskList({ tasks, setTasks }) {
+  const [filter,setFilter] = useState("All");
+  const [search,setSearch] = useState("");
+  const [modal,setModal] = useState(false);
+  const [editing,setEditing] = useState(null);
+  const blank = {title:"",details:"",priority:"Medium",status:"Todo",deadline:""};
+  const [form,setForm] = useState(blank);
+  const filtered = tasks.filter(t=>(filter==="All"||t.status===filter)&&t.title.toLowerCase().includes(search.toLowerCase()));
+  function openAdd(){setEditing(null);setForm(blank);setModal(true);}
+  function openEdit(t){setEditing(t.id);setForm({...t});setModal(true);}
+  function save(){if(!form.title.trim())return;if(editing)setTasks(tasks.map(t=>t.id===editing?{...form,id:editing}:t));else setTasks([...tasks,{...form,id:uid(),createdAt:today()}]);setModal(false);}
+  function del(id){if(confirm("Delete task?"))setTasks(tasks.filter(t=>t.id!==id));}
+  function cycle(t){const o=["Todo","In Progress","Done","Blocked"];setTasks(tasks.map(x=>x.id===t.id?{...x,status:o[(o.indexOf(t.status)+1)%o.length]}:x));}
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={gl.pageTitle} className="page-title">My Tasks</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>{tasks.filter(t=>t.status!=="Done").length} pending</div></div>
+        <button style={gl.btn} onClick={openAdd}>+ New</button>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        <input style={{...gl.input,maxWidth:200}} placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+          {["All","Todo","In Progress","Done","Blocked"].map(s=>(
+            <button key={s} onClick={()=>setFilter(s)} style={{background:filter===s?C.text:"transparent",color:filter===s?"#fff":C.muted2,border:`1px solid ${filter===s?C.text:C.border2}`,borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer",fontWeight:filter===s?600:400}}>{s}</button>
+          ))}
+        </div>
+      </div>
+      <div style={gl.card}>
+        <div style={{...gl.tHead,display:"grid",gridTemplateColumns:"1fr 80px 36px"}} className="task-grid-head">
+          <span>Task</span><span>Status</span><span></span>
+        </div>
+        {filtered.length===0&&<div style={{color:C.muted,padding:"16px 0",fontSize:13}}>No tasks found.</div>}
+        {filtered.map(t=>(
+          <div key={t.id} style={{...gl.tRow,gridTemplateColumns:"1fr 80px 36px"}} className="task-grid">
+            <div style={{cursor:"pointer",overflow:"hidden"}} onClick={()=>openEdit(t)}>
+              <div style={{fontWeight:500,color:t.status==="Done"?C.muted:C.text,textDecoration:t.status==="Done"?"line-through":"none",fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+              <div style={{display:"flex",gap:6,marginTop:3,flexWrap:"wrap"}}>
+                <PBadge p={t.priority}/>
+                {t.deadline&&<span style={{fontSize:11,color:t.deadline<today()&&t.status!=="Done"?C.red:C.muted}}>{fmt(t.deadline)}</span>}
+              </div>
+            </div>
+            <span style={{cursor:"pointer"}} onClick={()=>cycle(t)}><SBadge s={t.status}/></span>
+            <button onClick={()=>del(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:16}}>×</button>
+          </div>
+        ))}
+      </div>
+      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Edit Task":"New Task"}>
+        <Field label="Title *"><input style={gl.input} value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="What needs to be done?"/></Field>
+        <Field label="Details"><textarea style={gl.textarea} value={form.details} onChange={e=>setForm({...form,details:e.target.value})} placeholder="Additional context…"/></Field>
+        <div style={{...gl.row}} className="row-wrap">
+          <Field label="Priority"><select style={gl.select} value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>{["High","Medium","Low"].map(p=><option key={p}>{p}</option>)}</select></Field>
+          <Field label="Status"><select style={gl.select} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{["Todo","In Progress","Done","Blocked"].map(s=><option key={s}>{s}</option>)}</select></Field>
+          <Field label="Deadline"><input style={gl.input} type="date" value={form.deadline} onChange={e=>setForm({...form,deadline:e.target.value})}/></Field>
+        </div>
+        <SaveRow onCancel={()=>setModal(false)} onSave={save} saveLabel={editing?"Save":"Add Task"}/>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── DAILY ROUTINE ────────────────────────────────────────────────────────────
+function DailyRoutine({ tasks }) {
+  const [blocks,setBlocks] = useState(()=>load("blocks",[
+    {id:uid(),title:"Morning Standup",hour:9,duration:1,priority:"Medium",blockStatus:"Not Started",taskId:null,color:C.accent,notes:""},
+    {id:uid(),title:"Client Call",hour:11,duration:1,priority:"High",blockStatus:"Not Started",taskId:null,color:C.red,notes:"Prepare deck"},
+    {id:uid(),title:"Deep Work",hour:14,duration:2,priority:"High",blockStatus:"Not Started",taskId:null,color:C.purple,notes:""},
+    {id:uid(),title:"EOD Review",hour:17,duration:1,priority:"Low",blockStatus:"Not Started",taskId:null,color:C.green,notes:""},
+  ]));
+  useEffect(()=>save("blocks",blocks),[blocks]);
+  const [modal,setModal] = useState(false);
+  const [editing,setEditing] = useState(null);
+  const blank = {title:"",hour:9,duration:1,priority:"Medium",blockStatus:"Not Started",taskId:null,color:C.accent,notes:""};
+  const [form,setForm] = useState(blank);
+  const [view,setView] = useState("routine");
+  function openAdd(h){setEditing(null);setForm({...blank,hour:h||9});setModal(true);}
+  function openEdit(b){setEditing(b.id);setForm({...b});setModal(true);}
+  function save_(){if(!form.title.trim())return;if(editing)setBlocks(blocks.map(b=>b.id===editing?{...form,id:editing}:b));else setBlocks([...blocks,{...form,id:uid()}]);setModal(false);}
+  function del(id){setBlocks(blocks.filter(b=>b.id!==id));}
+  function cycleBS(id){setBlocks(blocks.map(b=>{if(b.id!==id)return b;const next=BLOCK_STATUS[(BLOCK_STATUS.indexOf(b.blockStatus)+1)%BLOCK_STATUS.length];return{...b,blockStatus:next};}));}
+  const sorted=[...blocks].sort((a,b)=>a.hour-b.hour);
+  const now=new Date().getHours();
+  const total=blocks.length, completed=blocks.filter(b=>b.blockStatus==="Completed").length;
+  const working=blocks.filter(b=>b.blockStatus==="Working").length;
+  const pending=blocks.filter(b=>b.blockStatus==="Pending").length;
+  const notStarted=blocks.filter(b=>b.blockStatus==="Not Started").length;
+  const score=total?pct(completed,total):0;
+
+  if(view==="todo") return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={gl.pageTitle} className="page-title">Today's To-Do</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>Tap status to update</div></div>
+        <button style={gl.btnGhost} onClick={()=>setView("routine")}>← Routine</button>
+      </div>
+      <div style={{...gl.cardSm,marginBottom:16,display:"flex",gap:16,alignItems:"center"}}>
+        <div><div style={gl.label}>Score</div><div style={{fontSize:24,fontWeight:700,color:score>=75?C.green:score>=40?C.yellow:C.red}}>{score}%</div></div>
+        <div style={{flex:1}}>
+          <PBar value={score} color={score>=75?C.green:score>=40?C.yellow:C.red} height={6}/>
+          <div style={{display:"flex",gap:10,marginTop:6,fontSize:11,flexWrap:"wrap"}}>
+            <span style={{color:C.green}}>● {completed} done</span>
+            <span style={{color:C.accent}}>● {working} working</span>
+            <span style={{color:C.yellow}}>● {pending} pending</span>
+            <span style={{color:C.muted}}>● {notStarted} not started</span>
+          </div>
+        </div>
+      </div>
+      {sorted.map(b=>{
+        const linked=tasks.find(t=>t.id===b.taskId);
+        return (
+          <div key={b.id} style={{display:"flex",gap:12,marginBottom:8,alignItems:"flex-start"}}>
+            <div style={{minWidth:44,textAlign:"right",fontSize:11,color:C.muted,paddingTop:5}}>{String(b.hour).padStart(2,"0")}:00</div>
+            <div style={{borderLeft:`3px solid ${b.color}`,paddingLeft:12,flex:1,paddingBottom:10,borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <span style={{fontWeight:600,fontSize:14,textDecoration:b.blockStatus==="Completed"?"line-through":"none",color:b.blockStatus==="Completed"?C.muted:C.text}}>{b.title}</span>
+                <PBadge p={b.priority}/>
+                {b.hour===now&&<span style={gl.badge(C.accent,C.accentBg)}>Now</span>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
+                <BlockStatusBadge status={b.blockStatus} onClick={()=>cycleBS(b.id)}/>
+                <span style={{fontSize:11,color:C.muted}}>{b.duration}h{linked?` · ${linked.title}`:""}</span>
+              </div>
+              {b.notes&&<div style={{fontSize:11,color:C.muted2,marginTop:3,fontStyle:"italic"}}>{b.notes}</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div><div style={gl.pageTitle} className="page-title">Daily Routine</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</div></div>
+        <div style={{display:"flex",gap:6}}>
+          <button style={gl.btnGhost} onClick={()=>setView("todo")}>📋 To-Do</button>
+          <button style={gl.btn} onClick={()=>openAdd()}>+ Add</button>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:14}} className="stat-grid-5">
+        {[{label:"Score",value:`${score}%`,color:score>=75?C.green:score>=40?C.yellow:C.red},{label:"Done",value:completed,color:C.green},{label:"Working",value:working,color:C.accent},{label:"Pending",value:pending,color:C.yellow},{label:"Not Started",value:notStarted,color:C.muted}].map(s=>(
+          <div key={s.label} style={{...gl.cardSm,textAlign:"center",padding:"8px 6px"}}>
+            <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".4px",marginBottom:3}}>{s.label}</div>
+            <div style={{fontSize:18,fontWeight:700,color:s.color}}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={gl.card}>
+        {HOURS.map(h=>{
+          const hb=blocks.filter(b=>b.hour===h);
+          const isCur=h===now,isPast=h<now;
+          return (
+            <div key={h} style={{display:"flex",minHeight:46,borderBottom:`1px solid ${C.border}`}}>
+              <div style={{minWidth:48,padding:"8px 10px 0 0",textAlign:"right",fontSize:11,color:isCur?C.accent:isPast?C.muted:C.muted2,fontWeight:isCur?700:400}}>{String(h).padStart(2,"0")}:00</div>
+              <div style={{flex:1,padding:"5px 0 5px 12px",borderLeft:`2px solid ${isCur?C.accent:C.border}`,display:"flex",gap:6,flexWrap:"wrap",alignItems:"flex-start"}}>
+                {hb.map(b=>(
+                  <div key={b.id} onClick={()=>openEdit(b)} style={{background:b.color+"10",border:`1px solid ${b.color}33`,borderLeft:`3px solid ${b.color}`,borderRadius:7,padding:"6px 10px",cursor:"pointer",minWidth:140}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:6}}>
+                      <span style={{fontSize:12,fontWeight:600,textDecoration:b.blockStatus==="Completed"?"line-through":"none"}}>{b.title}</span>
+                      <button onClick={e=>{e.stopPropagation();del(b.id);}} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:12,padding:0}}>×</button>
+                    </div>
+                    <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
+                      <BlockStatusBadge status={b.blockStatus} onClick={()=>cycleBS(b.id)}/>
+                      <span style={{fontSize:10,color:C.muted}}>{b.duration}h</span>
+                    </div>
+                  </div>
+                ))}
+                {hb.length===0&&<button onClick={()=>openAdd(h)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:11,padding:"3px 0",opacity:.5}}>+ add</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Edit Block":"Add Block"}>
+        <Field label="Title *"><input style={gl.input} value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Deep Work, Client Call…"/></Field>
+        <div style={{...gl.row}} className="row-wrap">
+          <Field label="Start Hour"><select style={gl.select} value={form.hour} onChange={e=>setForm({...form,hour:+e.target.value})}>{HOURS.map(h=><option key={h} value={h}>{String(h).padStart(2,"0")}:00</option>)}</select></Field>
+          <Field label="Duration"><select style={gl.select} value={form.duration} onChange={e=>setForm({...form,duration:+e.target.value})}>{[1,2,3,4].map(d=><option key={d} value={d}>{d}h</option>)}</select></Field>
+          <Field label="Priority"><select style={gl.select} value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>{["High","Medium","Low"].map(p=><option key={p}>{p}</option>)}</select></Field>
+        </div>
+        <div style={{...gl.row}} className="row-wrap">
+          <Field label="Status"><select style={gl.select} value={form.blockStatus} onChange={e=>setForm({...form,blockStatus:e.target.value})}>{BLOCK_STATUS.map(s=><option key={s}>{s}</option>)}</select></Field>
+          <Field label="Link Task"><select style={gl.select} value={form.taskId||""} onChange={e=>setForm({...form,taskId:e.target.value||null})}><option value="">— None —</option>{tasks.filter(t=>t.status!=="Done").map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></Field>
+        </div>
+        <Field label="Color">
+          <div style={{display:"flex",gap:6,marginTop:3}}>
+            {BLOCK_COLORS.map(clr=><div key={clr} onClick={()=>setForm({...form,color:clr})} style={{width:20,height:20,borderRadius:"50%",background:clr,cursor:"pointer",border:form.color===clr?`2px solid ${C.text}`:"2px solid transparent"}}/>)}
+          </div>
+        </Field>
+        <Field label="Notes"><textarea style={gl.textarea} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Preparation notes…"/></Field>
+        <SaveRow onCancel={()=>setModal(false)} onSave={save_} saveLabel={editing?"Save":"Add Block"}/>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── PERFORMANCE ─────────────────────────────────────────────────────────────
+function Performance({ tasks }) {
+  const total=tasks.length, done=tasks.filter(t=>t.status==="Done").length;
+  const inprog=tasks.filter(t=>t.status==="In Progress").length;
+  const blocked=tasks.filter(t=>t.status==="Blocked").length;
+  const todo=tasks.filter(t=>t.status==="Todo").length;
+  const overdue=tasks.filter(t=>t.deadline<today()&&t.status!=="Done").length;
+  const onTime=tasks.filter(t=>t.status==="Done"&&t.deadline>=t.createdAt).length;
+  const accuracy=done?pct(onTime,done):0;
+  const completion=pct(done,total);
+  return (
+    <div>
+      <div style={gl.pageTitle} className="page-title">My Performance</div>
+      <div style={{color:C.muted,fontSize:12,marginTop:2,marginBottom:18}}>Your personal productivity report</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}} className="stat-grid-4">
+        {[{label:"Completion",value:`${completion}%`,color:C.green},{label:"Accuracy",value:`${accuracy}%`,color:C.accent},{label:"Overdue",value:overdue,color:overdue>0?C.red:C.green},{label:"In Progress",value:inprog,color:C.yellow}].map(s=>(
+          <div key={s.label} style={gl.cardSm}><div style={gl.label}>{s.label}</div><div style={{fontSize:26,fontWeight:700,color:s.color}}>{s.value}</div></div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="two-col">
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:12}}>Status Breakdown</div>
+          <PBar value={completion} color={C.green} height={7}/>
+          <div style={{fontSize:12,color:C.muted,marginTop:6,marginBottom:14}}>{done} of {total} tasks done</div>
+          {[{label:"Todo",val:todo,color:C.muted},{label:"In Progress",val:inprog,color:C.accent},{label:"Done",val:done,color:C.green},{label:"Blocked",val:blocked,color:C.red}].map(r=>(
+            <div key={r.label} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:7,alignItems:"center"}}>
+              <span style={{color:C.muted2}}>{r.label}</span>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <div style={{width:60,height:4,background:C.border,borderRadius:99,overflow:"hidden"}}><div style={{width:`${pct(r.val,total)}%`,height:"100%",background:r.color,borderRadius:99}}/></div>
+                <span style={{fontWeight:600,color:r.color,minWidth:16,textAlign:"right"}}>{r.val}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:12}}>By Priority</div>
+          {["High","Medium","Low"].map(p=>{
+            const t=tasks.filter(x=>x.priority===p).length, d=tasks.filter(x=>x.priority===p&&x.status==="Done").length;
+            return (
+              <div key={p} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><PBadge p={p}/><span style={{fontSize:11,color:C.muted}}>{d}/{t} · {pct(d,t)}%</span></div>
+                <PBar value={pct(d,t)} color={PM[p][0]}/>
+              </div>
+            );
+          })}
+          {overdue>0&&<><div style={{fontWeight:600,marginTop:12,marginBottom:8,color:C.red,fontSize:13}}>⚠ Overdue</div>{tasks.filter(t=>t.deadline<today()&&t.status!=="Done").map(t=><div key={t.id} style={{fontSize:12,color:C.muted2,marginBottom:5,display:"flex",justifyContent:"space-between"}}><span>{t.title}</span><span style={{color:C.red}}>{fmt(t.deadline)}</span></div>)}</>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TEAM ─────────────────────────────────────────────────────────────────────
+function TeamMgmt() {
+  const [members,setMembers] = useState(()=>load("team",DEF_TEAM));
+  const [teamTasks,setTeamTasks] = useState(()=>load("teamtasks",[
+    {id:uid(),memberId:DEF_TEAM[0]?.id||"",title:"Design homepage",details:"Figma mockups",priority:"High",status:"In Progress",deadline:"2026-04-10"},
+    {id:uid(),memberId:DEF_TEAM[1]?.id||"",title:"Fix nav bug",details:"",priority:"Medium",status:"Done",deadline:"2026-04-03"},
+  ]));
+  useEffect(()=>save("team",members),[members]);
+  useEffect(()=>save("teamtasks",teamTasks),[teamTasks]);
+  const [view,setView] = useState("list");
+  const [selId,setSelId] = useState(null);
+  const [mModal,setMModal] = useState(false);
+  const [tModal,setTModal] = useState(false);
+  const [mForm,setMForm] = useState({name:"",dept:"",role:"",rating:3});
+  const [tForm,setTForm] = useState({memberId:"",title:"",details:"",priority:"Medium",status:"Todo",deadline:""});
+  const DEPTS=["Design","Development","Content","Marketing","Operations","Finance","Sales","Other"];
+  function saveMember(){if(!mForm.name.trim())return;setMembers([...members,{...mForm,id:uid()}]);setMModal(false);setMForm({name:"",dept:"",role:"",rating:3});}
+  function saveTask(){if(!tForm.title.trim()||!tForm.memberId)return;setTeamTasks([...teamTasks,{...tForm,id:uid()}]);setTModal(false);setTForm({memberId:"",title:"",details:"",priority:"Medium",status:"Todo",deadline:""});}
+  function cycleTS(t){const o=["Todo","In Progress","Done","Blocked"];setTeamTasks(teamTasks.map(x=>x.id===t.id?{...x,status:o[(o.indexOf(t.status)+1)%o.length]}:x));}
+  const mt=(mid)=>teamTasks.filter(t=>t.memberId===mid);
+
+  if(view==="member"&&selId){
+    const m=members.find(x=>x.id===selId); if(!m){setView("list");return null;}
+    const mts=mt(selId), done=mts.filter(t=>t.status==="Done").length;
+    return (
+      <div>
+        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16}}>
+          <button style={gl.btnGhost} onClick={()=>setView("list")}>← Back</button>
+          <div><div style={{fontSize:18,fontWeight:700}}>{m.name}</div><div style={{fontSize:12,color:C.muted}}>{m.role} · {m.dept}</div></div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}} className="stat-grid-3">
+          <div style={gl.cardSm}><div style={gl.label}>Assigned</div><div style={{fontSize:22,fontWeight:700}}>{mts.length}</div></div>
+          <div style={gl.cardSm}><div style={gl.label}>Done</div><div style={{fontSize:22,fontWeight:700,color:C.green}}>{done}</div></div>
+          <div style={gl.cardSm}><div style={gl.label}>Rate</div><div style={{fontSize:22,fontWeight:700,color:C.accent}}>{pct(done,mts.length)}%</div></div>
+        </div>
+        <div style={gl.card}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{fontWeight:600}}>Tasks</div>
+            <button style={gl.btnSm} onClick={()=>{setTForm({...tForm,memberId:selId});setTModal(true);}}>+ Assign</button>
+          </div>
+          {mts.length===0&&<div style={{color:C.muted,fontSize:13}}>No tasks yet.</div>}
+          {mts.map(t=>(
+            <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>{t.title}</div>{t.details&&<div style={{fontSize:11,color:C.muted}}>{t.details}</div>}</div>
+              <PBadge p={t.priority}/>
+              <span style={{cursor:"pointer"}} onClick={()=>cycleTS(t)}><SBadge s={t.status}/></span>
+            </div>
+          ))}
+        </div>
+        <div style={{...gl.card,marginTop:14}}>
+          <div style={{fontWeight:600,marginBottom:10}}>Rating</div>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+            {[1,2,3,4,5].map(r=><button key={r} onClick={()=>setMembers(members.map(x=>x.id===m.id?{...x,rating:r}:x))} style={{fontSize:24,background:"none",border:"none",cursor:"pointer",color:r<=m.rating?C.yellow:C.border2}}>★</button>)}
+            <span style={{fontSize:13,color:C.muted,marginLeft:4}}>{m.rating}/5</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={gl.pageTitle} className="page-title">Team</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>{members.length} members</div></div>
+        <div style={{display:"flex",gap:6}}>
+          <button style={gl.btnGhost} onClick={()=>setTModal(true)}>+ Task</button>
+          <button style={gl.btn} onClick={()=>setMModal(true)}>+ Member</button>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}} className="two-col">
+        {members.map(m=>{
+          const mts=mt(m.id), done=mts.filter(t=>t.status==="Done").length;
+          return (
+            <div key={m.id} style={{...gl.card,cursor:"pointer"}} onClick={()=>{setSelId(m.id);setView("member");}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:C.accent,fontSize:14}}>{m.name[0]}</div>
+                <button onClick={e=>{e.stopPropagation();if(confirm("Remove?"))setMembers(members.filter(x=>x.id!==m.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.muted}}>×</button>
+              </div>
+              <div style={{marginTop:8,fontWeight:600,fontSize:14}}>{m.name}</div>
+              <div style={{fontSize:12,color:C.muted}}>{m.role}</div>
+              <span style={gl.badge(C.purple,C.purpleBg)}>{m.dept}</span>
+              <div style={{marginTop:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:3}}><span>{done}/{mts.length} done</span><span>{pct(done,mts.length)}%</span></div>
+                <PBar value={pct(done,mts.length)}/>
+              </div>
+              <div style={{display:"flex",marginTop:8}}>{[1,2,3,4,5].map(r=><span key={r} style={{color:r<=m.rating?C.yellow:C.border2,fontSize:13}}>★</span>)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <Modal open={mModal} onClose={()=>setMModal(false)} title="Add Member">
+        <Field label="Full Name *"><input style={gl.input} value={mForm.name} onChange={e=>setMForm({...mForm,name:e.target.value})} placeholder="e.g. Riya Islam"/></Field>
+        <div style={gl.row} className="row-wrap">
+          <Field label="Department"><select style={gl.select} value={mForm.dept} onChange={e=>setMForm({...mForm,dept:e.target.value})}><option value="">Select…</option>{DEPTS.map(d=><option key={d}>{d}</option>)}</select></Field>
+          <Field label="Role"><input style={gl.input} value={mForm.role} onChange={e=>setMForm({...mForm,role:e.target.value})} placeholder="e.g. Designer"/></Field>
+        </div>
+        <SaveRow onCancel={()=>setMModal(false)} onSave={saveMember} saveLabel="Add Member"/>
+      </Modal>
+      <Modal open={tModal} onClose={()=>setTModal(false)} title="Assign Task">
+        <Field label="Assign To *"><select style={gl.select} value={tForm.memberId} onChange={e=>setTForm({...tForm,memberId:e.target.value})}><option value="">Select…</option>{members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></Field>
+        <Field label="Task *"><input style={gl.input} value={tForm.title} onChange={e=>setTForm({...tForm,title:e.target.value})} placeholder="Task name"/></Field>
+        <Field label="Details"><textarea style={gl.textarea} value={tForm.details} onChange={e=>setTForm({...tForm,details:e.target.value})}/></Field>
+        <div style={gl.row} className="row-wrap">
+          <Field label="Priority"><select style={gl.select} value={tForm.priority} onChange={e=>setTForm({...tForm,priority:e.target.value})}>{["High","Medium","Low"].map(p=><option key={p}>{p}</option>)}</select></Field>
+          <Field label="Status"><select style={gl.select} value={tForm.status} onChange={e=>setTForm({...tForm,status:e.target.value})}>{["Todo","In Progress","Done","Blocked"].map(s=><option key={s}>{s}</option>)}</select></Field>
+          <Field label="Deadline"><input style={gl.input} type="date" value={tForm.deadline} onChange={e=>setTForm({...tForm,deadline:e.target.value})}/></Field>
+        </div>
+        <SaveRow onCancel={()=>setTModal(false)} onSave={saveTask} saveLabel="Assign"/>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── PROJECTS ─────────────────────────────────────────────────────────────────
+function Projects() {
+  const [projects,setProjects] = useState(()=>load("projects",DEF_PROJECTS));
+  useEffect(()=>save("projects",projects),[projects]);
+  const [modal,setModal] = useState(false);
+  const [editing,setEditing] = useState(null);
+  const blank={name:"",client:"",status:"Todo",deadline:"",budget:0,spent:0,desc:"",progress:0};
+  const [form,setForm] = useState(blank);
+  function openAdd(){setEditing(null);setForm(blank);setModal(true);}
+  function openEdit(p){setEditing(p.id);setForm({...p});setModal(true);}
+  function save_(){if(!form.name.trim())return;if(editing)setProjects(projects.map(p=>p.id===editing?{...form,id:editing}:p));else setProjects([...projects,{...form,id:uid()}]);setModal(false);}
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={gl.pageTitle} className="page-title">Projects</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>{projects.filter(p=>p.status==="In Progress").length} active</div></div>
+        <button style={gl.btn} onClick={openAdd}>+ New</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}} className="two-col">
+        {projects.map(p=>{
+          const over=p.spent>p.budget;
+          return (
+            <div key={p.id} style={{...gl.card,cursor:"pointer"}} onClick={()=>openEdit(p)}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div><div style={{fontWeight:700,fontSize:14}}>{p.name}</div><div style={{fontSize:12,color:C.muted}}>{p.client}</div></div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <SBadge s={p.status}/>
+                  <button onClick={e=>{e.stopPropagation();if(confirm("Delete?"))setProjects(projects.filter(x=>x.id!==p.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.muted}}>×</button>
+                </div>
+              </div>
+              {p.desc&&<div style={{fontSize:12,color:C.muted2,marginBottom:10}}>{p.desc}</div>}
+              <div style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:3}}><span>Progress</span><span>{p.progress}%</span></div>
+                <PBar value={p.progress} color={p.status==="Done"?C.green:C.accent}/>
+              </div>
+              <div style={{fontSize:12,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4}}>
+                <span><span style={{color:C.muted}}>Budget: </span><span style={{fontWeight:600}}>${(p.budget||0).toLocaleString()}</span> · <span style={{color:over?C.red:C.muted}}>Spent: ${(p.spent||0).toLocaleString()}</span></span>
+                <span style={{color:C.muted,fontSize:11}}>Due {fmt(p.deadline)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <Modal open={modal} onClose={()=>setModal(false)} title={editing?"Edit Project":"New Project"}>
+        <Field label="Name *"><input style={gl.input} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Project name"/></Field>
+        <div style={gl.row} className="row-wrap">
+          <Field label="Client"><input style={gl.input} value={form.client} onChange={e=>setForm({...form,client:e.target.value})}/></Field>
+          <Field label="Status"><select style={gl.select} value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{["Todo","In Progress","On Hold","Done","Cancelled"].map(s=><option key={s}>{s}</option>)}</select></Field>
+          <Field label="Deadline"><input style={gl.input} type="date" value={form.deadline} onChange={e=>setForm({...form,deadline:e.target.value})}/></Field>
+        </div>
+        <div style={gl.row} className="row-wrap">
+          <Field label="Budget ($)"><input style={gl.input} type="number" value={form.budget} onChange={e=>setForm({...form,budget:+e.target.value})}/></Field>
+          <Field label="Spent ($)"><input style={gl.input} type="number" value={form.spent} onChange={e=>setForm({...form,spent:+e.target.value})}/></Field>
+          <Field label="Progress %"><input style={gl.input} type="number" min={0} max={100} value={form.progress} onChange={e=>setForm({...form,progress:+e.target.value})}/></Field>
+        </div>
+        <Field label="Description"><textarea style={gl.textarea} value={form.desc} onChange={e=>setForm({...form,desc:e.target.value})}/></Field>
+        <SaveRow onCancel={()=>setModal(false)} onSave={save_} saveLabel={editing?"Save":"Create"}/>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── NOTES ────────────────────────────────────────────────────────────────────
+function Notes() {
+  const [data,setData] = useState(()=>load("notes",DEF_NOTES));
+  useEffect(()=>save("notes",data),[data]);
+  const [selFolder,setSelFolder] = useState(data.folders[0]?.id||null);
+  const [selNote,setSelNote] = useState(null);
+  const [newFolder,setNewFolder] = useState("");
+  const [addingFolder,setAddingFolder] = useState(false);
+  const [mobileView,setMobileView] = useState("folders"); // folders | notes | editor
+  const folder=data.folders.find(f=>f.id===selFolder);
+  const notes=data.notes.filter(n=>n.folderId===selFolder);
+  const note=data.notes.find(n=>n.id===selNote);
+  function addFolder(){if(!newFolder.trim())return;const f={id:uid(),name:newFolder.trim()};setData({...data,folders:[...data.folders,f]});setSelFolder(f.id);setNewFolder("");setAddingFolder(false);}
+  function addNote(){const n={id:uid(),folderId:selFolder,title:"Untitled",body:"",updatedAt:today()};setData({...data,notes:[n,...data.notes]});setSelNote(n.id);setMobileView("editor");}
+  function updateNote(id,field,val){setData({...data,notes:data.notes.map(n=>n.id===id?{...n,[field]:val,updatedAt:today()}:n)});}
+  function delNote(id){setData({...data,notes:data.notes.filter(n=>n.id!==id)});setSelNote(null);setMobileView("notes");}
+  return (
+    <div style={{display:"flex",height:"100%",marginTop:-22,marginLeft:-24,marginRight:-24}}>
+      {/* Folders */}
+      <div style={{width:160,borderRight:`1px solid ${C.border}`,background:C.sidebar,padding:"12px 0",flexShrink:0,overflowY:"auto"}}>
+        <div style={{padding:"0 10px 8px",fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".5px"}}>Folders</div>
+        {data.folders.map(f=>(
+          <div key={f.id} onClick={()=>{setSelFolder(f.id);setSelNote(null);setMobileView("notes");}} style={{...gl.navItem(selFolder===f.id),margin:"0 5px",justifyContent:"space-between",fontSize:13}}>
+            <span>📁 {f.name}</span>
+            <span style={{fontSize:10,color:C.muted}}>{data.notes.filter(n=>n.folderId===f.id).length}</span>
+          </div>
+        ))}
+        {addingFolder?(
+          <div style={{padding:"5px 8px"}}><input style={{...gl.input,fontSize:12,padding:"5px 8px"}} autoFocus value={newFolder} onChange={e=>setNewFolder(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addFolder()} placeholder="Name…"/></div>
+        ):(
+          <button onClick={()=>setAddingFolder(true)} style={{...gl.navItem(false),margin:"0 5px",border:"none",cursor:"pointer",background:"none",width:"100%",textAlign:"left",fontSize:13,color:C.muted}}>+ New Folder</button>
+        )}
+      </div>
+      {/* Note list */}
+      <div style={{width:180,borderRight:`1px solid ${C.border}`,background:C.bg,padding:"12px 0",flexShrink:0,overflowY:"auto"}}>
+        <div style={{padding:"0 12px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontWeight:600,fontSize:13}}>{folder?.name}</span>
+          <button onClick={addNote} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.accent,lineHeight:1}}>+</button>
+        </div>
+        {notes.length===0&&<div style={{padding:"0 12px",fontSize:12,color:C.muted}}>No notes.</div>}
+        {notes.map(n=>(
+          <div key={n.id} onClick={()=>{setSelNote(n.id);setMobileView("editor");}} style={{padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:selNote===n.id?C.accentBg:"transparent"}}>
+            <div style={{fontWeight:500,fontSize:13}}>{n.title||"Untitled"}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>{n.updatedAt}</div>
+          </div>
+        ))}
+      </div>
+      {/* Editor */}
+      <div style={{flex:1,padding:"20px 24px",overflowY:"auto"}}>
+        {note?(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+              <input value={note.title} onChange={e=>updateNote(note.id,"title",e.target.value)} style={{fontSize:20,fontWeight:700,border:"none",outline:"none",width:"100%",fontFamily:font,letterSpacing:"-0.3px"}} placeholder="Title…"/>
+              <button onClick={()=>delNote(note.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:12,whiteSpace:"nowrap",marginLeft:10}}>Delete</button>
+            </div>
+            <div style={{fontSize:11,color:C.muted,marginBottom:14}}>Updated {note.updatedAt}</div>
+            <textarea value={note.body} onChange={e=>updateNote(note.id,"body",e.target.value)} style={{border:"none",outline:"none",width:"100%",minHeight:360,fontSize:14,lineHeight:1.8,fontFamily:font,color:C.text,resize:"none",background:"transparent"}} placeholder="Start writing…"/>
+          </>
+        ):(
+          <div style={{color:C.muted,fontSize:13,textAlign:"center",marginTop:60}}>Select or create a note</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── FINANCE ──────────────────────────────────────────────────────────────────
+function Finance() {
+  const [finance,setFinance] = useState(()=>load("finance",DEF_FINANCE));
+  useEffect(()=>save("finance",finance),[finance]);
+  const [selMonth,setSelMonth] = useState("2026-04");
+  const [tab,setTab] = useState("overview");
+  const months=Object.keys(finance.months);
+  const mdata=finance.months[selMonth]||{};
+  function addMonth(){const m=prompt("Enter month (YYYY-MM):");if(!m||finance.months[m])return;setFinance({...finance,months:{...finance.months,[m]:{totalSaleUSD:0,totalSaleBDT:0,usdToBdt:110,expense:0,advancePayment:0,salaryAdvance:0,previousMonth:0,gateways:Object.fromEntries(GATEWAYS.map(g=>[g,{usd:0,bdt:0}]))}}});setSelMonth(m);}
+  function updateMeta(key,val){setFinance({...finance,months:{...finance.months,[selMonth]:{...mdata,[key]:+val||0}}});}
+  function updateGW(gw,cur,val){const gateways={...mdata.gateways,[gw]:{...mdata.gateways[gw],[cur]:+val||0}};setFinance({...finance,months:{...finance.months,[selMonth]:{...mdata,gateways}}});}
+  const gwe=mdata.gateways?Object.entries(mdata.gateways):[];
+  const tUSD=gwe.reduce((s,[,v])=>s+(v.usd||0),0), tBDT=gwe.reduce((s,[,v])=>s+(v.bdt||0),0);
+  const totalExp=(mdata.expense||0)+(mdata.advancePayment||0)+(mdata.salaryAdvance||0);
+  const netBDT=(mdata.totalSaleBDT||0)+(mdata.previousMonth||0)-totalExp;
+  const nf=(n,p="")=>`${p}${(+n||0).toLocaleString()}`;
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <div><div style={gl.pageTitle} className="page-title">Finance</div><div style={{color:C.muted,fontSize:12,marginTop:2}}>Income & expense tracker</div></div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <select style={{...gl.select,width:120}} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>{months.map(m=><option key={m} value={m}>{m}</option>)}</select>
+          <button style={gl.btnGhost} onClick={addMonth}>+ Month</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:4,marginBottom:16,flexWrap:"wrap"}}>
+        {["overview","gateways","summary"].map(t=>(
+          <button key={t} onClick={()=>setTab(t)} style={{background:tab===t?C.text:"transparent",color:tab===t?"#fff":C.muted2,border:`1px solid ${tab===t?C.text:C.border2}`,borderRadius:6,padding:"5px 12px",fontSize:12,cursor:"pointer",fontWeight:tab===t?600:400,textTransform:"capitalize"}}>{t}</button>
+        ))}
+      </div>
+      {tab==="overview"&&(
+        <>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}} className="stat-grid-4">
+            {[{label:"Sale (USD)",value:nf(mdata.totalSaleUSD,"$"),color:C.accent},{label:"Sale (BDT)",value:nf(mdata.totalSaleBDT,"৳"),color:C.green},{label:"Expenses",value:nf(totalExp,"৳"),color:C.red},{label:"Net Balance",value:nf(netBDT,"৳"),color:netBDT>=0?C.green:C.red}].map(s=>(
+              <div key={s.label} style={gl.cardSm}><div style={gl.label}>{s.label}</div><div style={{fontSize:20,fontWeight:700,color:s.color}}>{s.value}</div></div>
+            ))}
+          </div>
+          <div style={gl.card}>
+            <div style={{fontWeight:600,marginBottom:14}}>Monthly Inputs</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="two-col">
+              {[{label:"Total Sale (USD)",key:"totalSaleUSD"},{label:"Total Sale (BDT)",key:"totalSaleBDT"},{label:"USD→BDT Rate",key:"usdToBdt"},{label:"Expenses (BDT)",key:"expense"},{label:"Advance Payment",key:"advancePayment"},{label:"Salary Advance",key:"salaryAdvance"},{label:"Previous Month",key:"previousMonth"}].map(f=>(
+                <div key={f.key}><label style={gl.label}>{f.label}</label><input style={gl.input} type="number" value={mdata[f.key]||0} onChange={e=>updateMeta(f.key,e.target.value)}/></div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      {tab==="gateways"&&(
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:12}}>Payment Gateways — {selMonth}</div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8,marginBottom:6,...gl.tHead}}>
+            <span>Gateway</span><span>USD</span><span>BDT</span>
+          </div>
+          {GATEWAYS.map(gw=>{
+            const v=mdata.gateways?.[gw]||{usd:0,bdt:0};
+            return (
+              <div key={gw} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
+                <span style={{fontSize:12}}>{gw}</span>
+                <input style={{...gl.input,padding:"4px 7px",fontSize:12}} type="number" value={v.usd||""} placeholder="0" onChange={e=>updateGW(gw,"usd",e.target.value)}/>
+                <input style={{...gl.input,padding:"4px 7px",fontSize:12}} type="number" value={v.bdt||""} placeholder="0" onChange={e=>updateGW(gw,"bdt",e.target.value)}/>
+              </div>
+            );
+          })}
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8,padding:"10px 0 0",fontWeight:700}}>
+            <span>Total</span>
+            <span style={{color:C.accent}}>${tUSD.toLocaleString()}</span>
+            <span style={{color:C.green}}>৳{tBDT.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+      {tab==="summary"&&(
+        <div style={gl.card}>
+          <div style={{fontWeight:600,marginBottom:14}}>Summary — {selMonth}</div>
+          {[{label:"Total Sale (USD)",value:nf(mdata.totalSaleUSD,"$"),color:C.accent},{label:"Total Sale (BDT)",value:nf(mdata.totalSaleBDT,"৳"),color:C.green},{label:"Gateway Collections (USD)",value:nf(tUSD,"$"),color:C.accent},{label:"Gateway Collections (BDT)",value:nf(tBDT,"৳"),color:C.green},{label:"Monthly Expenses",value:nf(mdata.expense,"৳"),color:C.red},{label:"Advance Payment",value:nf(mdata.advancePayment,"৳"),color:C.red},{label:"Salary Advance",value:nf(mdata.salaryAdvance,"৳"),color:C.red},{label:"Previous Month",value:nf(mdata.previousMonth,"৳"),color:C.muted2}].map(r=>(
+            <div key={r.label} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+              <span style={{color:C.muted2}}>{r.label}</span><span style={{fontWeight:600,color:r.color}}>{r.value}</span>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0 0",fontSize:15,fontWeight:700}}>
+            <span>Net Balance (BDT)</span><span style={{color:netBDT>=0?C.green:C.red}}>৳{netBDT.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
+const NAV = [
+  {id:"dashboard",label:"Dashboard",icon:"⚡"},
+  {id:"tasks",label:"My Tasks",icon:"✅"},
+  {id:"routine",label:"Routine",icon:"🗓"},
+  {id:"performance",label:"Performance",icon:"📈"},
+  {id:"team",label:"Team",icon:"👥"},
+  {id:"projects",label:"Projects",icon:"📁"},
+  {id:"notes",label:"Notes",icon:"📝"},
+  {id:"finance",label:"Finance",icon:"💰"},
+];
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [page,setPage] = useState("dashboard");
+  const [tasks,setTasks] = useState(()=>load("tasks",DEF_TASKS));
+  useEffect(()=>save("tasks",tasks),[tasks]);
+
+  return (
+    <div style={gl.app}>
+      <div style={gl.appInner}>
+        {/* Desktop Sidebar */}
+        <div style={gl.sidebar} className="desktop-sidebar">
+          <div style={gl.sideTop}>
+            <div style={gl.logo}>
+              <span style={{fontSize:18}}>◈</span>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,letterSpacing:"-0.3px",lineHeight:1.2}}>The Founder's OS</div>
+                <div style={{fontSize:10,color:C.muted,fontWeight:400,marginTop:1}}>Agency Command Center</div>
+              </div>
+            </div>
+          </div>
+          <div style={{padding:"10px 8px",flex:1,overflowY:"auto"}}>
+            <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:".8px",padding:"8px 10px 4px"}}>Workspace</div>
+            {NAV.map(n=>(
+              <div key={n.id} onClick={()=>setPage(n.id)} style={gl.navItem(page===n.id)}>
+                <span style={gl.navIcon}>{n.icon}</span><span>{n.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,fontSize:12,color:C.muted}}>
+            {tasks.filter(t=>t.status!=="Done").length} tasks pending
+          </div>
+        </div>
+
+        {/* Main */}
+        <div style={gl.main}>
+          <div style={{...gl.topbar, display: page==="notes"?"none":"flex"}}>
+            <div style={gl.pageTitle} className="page-title">{NAV.find(n=>n.id===page)?.label}</div>
+            <div style={{fontSize:12,color:C.muted}}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+          </div>
+          <div style={page==="notes"?{flex:1,overflow:"hidden",display:"flex"}:gl.content}>
+            {page==="dashboard"&&<Dashboard tasks={tasks}/>}
+            {page==="tasks"&&<TaskList tasks={tasks} setTasks={setTasks}/>}
+            {page==="routine"&&<DailyRoutine tasks={tasks}/>}
+            {page==="performance"&&<Performance tasks={tasks}/>}
+            {page==="team"&&<TeamMgmt/>}
+            {page==="projects"&&<Projects/>}
+            {page==="notes"&&<Notes/>}
+            {page==="finance"&&<Finance/>}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Bottom Nav */}
+      <div className="mobile-nav" style={{position:"fixed",bottom:0,left:0,right:0,background:C.bg,borderTop:`1px solid ${C.border}`,zIndex:200,paddingBottom:"env(safe-area-inset-bottom,0px)",display:"none"}}>
+        <div style={{display:"flex",justifyContent:"space-around",padding:"6px 0"}}>
+          {NAV.map(n=>(
+            <button key={n.id} onClick={()=>setPage(n.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 8px",minWidth:36}}>
+              <span style={{fontSize:18}}>{n.icon}</span>
+              <span style={{fontSize:9,color:page===n.id?C.accent:C.muted,fontWeight:page===n.id?600:400}}>{n.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById("root"));
+</script>
+
+<script>
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        console.log('SW registered:', reg.scope);
+      }).catch(err => {
+        console.log('SW failed:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
