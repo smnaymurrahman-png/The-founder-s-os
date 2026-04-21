@@ -86,7 +86,7 @@ input,textarea,select{font-size:16px}
 }
 .sb.open{transform:translateX(0);box-shadow:0 20px 48px rgba(0,0,0,.5)}
 
-.sb-brand{padding:18px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sb-brand{padding:18px 16px;padding-top:calc(18px + env(safe-area-inset-top,0));display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--border);flex-shrink:0}
 .logo{
   width:38px;height:38px;
   background:var(--grad);
@@ -142,14 +142,18 @@ input,textarea,select{font-size:16px}
 /* Main content area */
 .main{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 .top{
-  background:rgba(22,25,37,.85);
+  background:rgba(22,25,37,.92);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
   border-bottom:1px solid var(--border);
   padding:10px 14px;
+  padding-top:calc(10px + env(safe-area-inset-top,0));
+  padding-left:calc(14px + env(safe-area-inset-left,0));
+  padding-right:calc(14px + env(safe-area-inset-right,0));
   display:flex;align-items:center;justify-content:space-between;
   gap:10px;
   position:sticky;top:0;z-index:50;
+  min-height:calc(58px + env(safe-area-inset-top,0));
 }
 .top-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
 .ham{
@@ -521,7 +525,8 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
   .bn{display:none}
   .ov.show{display:none}
   .page{padding:24px 28px}
-  .top{padding:12px 28px;height:62px}
+  .top{padding:12px 28px;padding-top:12px;height:62px;min-height:62px}
+  .sb-brand{padding-top:18px}
   .top-title{font-size:17px}
   .top-date{font-size:11px}
   .g2{grid-template-columns:1fr 1fr;gap:16px}
